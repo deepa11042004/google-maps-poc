@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
 function App() {
   return (
@@ -14,7 +14,15 @@ function App() {
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         }}
-      />
+      >
+        <Marker
+          coordinate={{
+            latitude: 28.6139,
+            longitude: 77.209,
+          }}
+          title="Delhi"
+        />
+      </MapView>
     </View>
   );
 }
