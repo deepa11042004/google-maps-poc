@@ -9,13 +9,21 @@ import {
   View,
 } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+
+const GOOGLE_MAPS_API_KEY = 'AIzaSyAyyTfTaPeCXBPWnlcUPJTP8h5hbgoFiOw';
 
 function App() {
   const mapRef = useRef<MapView | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const [locationStatus, setLocationStatus] = useState('Requesting permission...');
   const [currentCoords, setCurrentCoords] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [selectedPlace, setSelectedPlace] = useState<{
+    name: string;
     latitude: number;
     longitude: number;
   } | null>(null);
@@ -89,6 +97,53 @@ function App() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.searchWrapper}>
+        <GooglePlacesAutocomplete
+          placeholder="Search pickup/drop address"
+          fetchDetails
+          enablePoweredByContainer={false}
+          query={{
+            key: GOOGLE_MAPS_API_KEY,
+            language: 'en',
+          }}
+          onPress={(data, details = null) => {
+            const location = details?.geometry?.location;
+
+            if (!location) {
+              return;
+            }
+
+            const latitude = location.lat;
+            const longitude = location.lng;
+
+            setSelectedPlace({
+              name: data.description,
+              latitude,
+              longitude,
+            });
+
+            mapRef.current?.animateCamera(
+              {
+                center: { latitude, longitude },
+                zoom: 16,
+              },
+              { duration: 900 },
+            );
+          }}
+          styles={{
+            textInput: styles.searchInput,
+            listView: styles.suggestionsList,
+            row: styles.suggestionRow,
+            description: styles.suggestionText,
+          }}
+          textInputProps={{
+            placeholderTextColor: '#6b7280',
+          }}
+          keyboardShouldPersistTaps="handled"
+          debounce={250}
+        />
+      </View>
+
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
@@ -102,13 +157,23 @@ function App() {
           longitudeDelta: 0.05,
         }}
       >
-        <Marker
-          coordinate={{
-            latitude: 28.6139,
-            longitude: 77.209,
-          }}
-          title="Delhi"
-        />
+        {selectedPlace ? (
+          <Marker
+            coordinate={{
+              latitude: selectedPlace.latitude,
+              longitude: selectedPlace.longitude,
+            }}
+            title={selectedPlace.name}
+          />
+        ) : (
+          <Marker
+            coordinate={{
+              latitude: 28.6139,
+              longitude: 77.209,
+            }}
+            title="Delhi"
+          />
+        )}
       </MapView>
 
       <View style={styles.debugCard}>
@@ -172,6 +237,39 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  searchWrapper: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 52 : 20,
+    left: 12,
+    right: 12,
+    zIndex: 20,
+  },
+  searchInput: {
+    height: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    backgroundColor: '#fff',
+    color: '#111827',
+    fontSize: 15,
+    paddingHorizontal: 12,
+  },
+  suggestionsList: {
+    marginTop: 6,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    maxHeight: 220,
+  },
+  suggestionRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  suggestionText: {
+    color: '#111827',
+    fontSize: 14,
   },
   debugCard: {
     position: 'absolute',
