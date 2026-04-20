@@ -26,6 +26,8 @@ function App() {
     name: string;
     latitude: number;
     longitude: number;
+    distanceText?: string;
+    durationText?: string;
   } | null>(null);
   const [routeCoords, setRouteCoords] = useState<
     Array<{ latitude: number; longitude: number }>
@@ -134,6 +136,21 @@ function App() {
       if (!encodedPoints) {
         setLocationStatus('Route error: No polyline points returned');
         return;
+      }
+
+      const firstLeg = data.routes[0]?.legs?.[0];
+      if (firstLeg?.distance?.text && firstLeg?.duration?.text) {
+        setSelectedPlace(prev => {
+          if (!prev) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            distanceText: firstLeg.distance.text,
+            durationText: firstLeg.duration.text,
+          };
+        });
       }
 
       const decodedRoute = decodePolyline(encodedPoints);
@@ -267,6 +284,14 @@ function App() {
             : 'Coords: not available yet'}
         </Text>
       </View>
+
+      {selectedPlace?.distanceText && selectedPlace?.durationText ? (
+        <View style={styles.tripCard}>
+          <Text style={styles.tripTitle}>Trip Summary</Text>
+          <Text style={styles.tripText}>Distance: {selectedPlace.distanceText}</Text>
+          <Text style={styles.tripText}>ETA: {selectedPlace.durationText}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -412,6 +437,26 @@ const styles = StyleSheet.create({
   debugText: {
     color: '#fff',
     fontSize: 12,
+  },
+  tripCard: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 118,
+    backgroundColor: 'rgba(17, 24, 39, 0.9)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  tripTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  tripText: {
+    color: '#e5e7eb',
+    fontSize: 13,
   },
 });
 
