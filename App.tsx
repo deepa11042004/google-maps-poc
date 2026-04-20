@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
 const GOOGLE_MAPS_API_KEY = 'AIzaSyAyyTfTaPeCXBPWnlcUPJTP8h5hbgoFiOw';
 
@@ -27,6 +27,9 @@ function App() {
     latitude: number;
     longitude: number;
   } | null>(null);
+  const [routeCoords, setRouteCoords] = useState<
+    Array<{ latitude: number; longitude: number }>
+  >([]);
 
   useEffect(() => {
     const requestAndLocateUser = async () => {
@@ -95,6 +98,64 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!currentCoords || !selectedPlace || routeCoords.length > 0) {
+      return;
+    }
+
+    fetchAndDrawRoute(currentCoords, {
+      latitude: selectedPlace.latitude,
+      longitude: selectedPlace.longitude,
+    });
+  }, [currentCoords, selectedPlace, routeCoords.length]);
+
+  const fetchAndDrawRoute = async (
+    origin: { latitude: number; longitude: number },
+    destination: { latitude: number; longitude: number },
+  ) => {
+    try {
+      setLocationStatus('Fetching route from A to B...');
+
+      const url =
+        'https://maps.googleapis.com/maps/api/directions/json?' +
+        `origin=${origin.latitude},${origin.longitude}&` +
+        `destination=${destination.latitude},${destination.longitude}&` +
+        `key=${GOOGLE_MAPS_API_KEY}`;
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.status !== 'OK' || !data.routes?.length) {
+        setLocationStatus(`Route error: ${data.status || 'UNKNOWN'}`);
+        return;
+      }
+
+      const encodedPoints = data.routes[0]?.overview_polyline?.points;
+      if (!encodedPoints) {
+        setLocationStatus('Route error: No polyline points returned');
+        return;
+      }
+
+      const decodedRoute = decodePolyline(encodedPoints);
+      setRouteCoords(decodedRoute);
+      setLocationStatus('Route ready');
+
+      mapRef.current?.fitToCoordinates(decodedRoute, {
+        edgePadding: {
+          top: 160,
+          right: 40,
+          bottom: 180,
+          left: 40,
+        },
+        animated: true,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to fetch route';
+      setLocationStatus(`Route error: ${message}`);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.searchWrapper}>
@@ -121,6 +182,8 @@ function App() {
               latitude,
               longitude,
             });
+
+            setRouteCoords([]);
 
             mapRef.current?.animateCamera(
               {
@@ -157,6 +220,17 @@ function App() {
           longitudeDelta: 0.05,
         }}
       >
+        {currentCoords ? (
+          <Marker
+            coordinate={{
+              latitude: currentCoords.latitude,
+              longitude: currentCoords.longitude,
+            }}
+            title="Current Location"
+            pinColor="#16a34a"
+          />
+        ) : null}
+
         {selectedPlace ? (
           <Marker
             coordinate={{
@@ -174,6 +248,14 @@ function App() {
             title="Delhi"
           />
         )}
+
+        {routeCoords.length > 1 ? (
+          <Polyline
+            coordinates={routeCoords}
+            strokeColor="#1d4ed8"
+            strokeWidth={5}
+          />
+        ) : null}
       </MapView>
 
       <View style={styles.debugCard}>
@@ -187,6 +269,47 @@ function App() {
       </View>
     </View>
   );
+}
+
+function decodePolyline(encoded: string) {
+  const coordinates: Array<{ latitude: number; longitude: number }> = [];
+  let index = 0;
+  let latitude = 0;
+  let longitude = 0;
+
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte: number;
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    const deltaLatitude = result & 1 ? ~(result >> 1) : result >> 1;
+    latitude += deltaLatitude;
+
+    shift = 0;
+    result = 0;
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    const deltaLongitude = result & 1 ? ~(result >> 1) : result >> 1;
+    longitude += deltaLongitude;
+
+    coordinates.push({
+      latitude: latitude / 1e5,
+      longitude: longitude / 1e5,
+    });
+  }
+
+  return coordinates;
 }
 
 async function requestLocationPermission() {
